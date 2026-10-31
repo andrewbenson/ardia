@@ -95,6 +95,20 @@ public final class BookmarkPump {
     return receipt
   }
 
+  func claimCatalog(coordinator: BookmarkCoordinator) throws -> BookmarkCatalogClaim {
+    guard self.coordinator === coordinator, !stopped else { throw BookmarkCoordinatorError.ownershipUnavailable }
+    try coordinator.claimCatalog(epoch: epoch)
+    return BookmarkCatalogClaim(coordinator: coordinator, pump: self, epoch: epoch)
+  }
+
+  func submit(operations: [BookmarkOperation], engine: String) async throws -> (BookmarkReceipt, BookmarkApplyResult) {
+    guard let profile = coordinator.catalogProfile(engine: engine) else { throw BookmarkCoordinatorError.invalidProfileScope }
+    let values = try JSONValue.parse(JSONEncoder().encode(operations))
+    let receipt = try await submit(profile: profile, mutations: [.init(method: "applyBookmarkOperations", args: [values])])
+    let result = receipt.results.first
+    return (receipt, BookmarkApplyResult(applied: Int(result?["applied"]?.number ?? 0), skipped: Int(result?["skipped"]?.number ?? 0), invalid: result?["invalid"]?.array?.compactMap(\.string) ?? []))
+  }
+
   public func requestRead(engine: String) {
     guard let lane = lane(engine) else { return }
     lane.read = true
@@ -308,5 +322,22 @@ private final class BookmarkEngineAdapter {
   }
   func apply(_ engine: String, _ ops: [BookmarkOperation]) async throws -> BookmarkApplyResult {
     try await client.applyBookmarks(ops: ops, engineProfile: engine)
+  }
+}
+
+@MainActor
+final class BookmarkCatalogClaim {
+  let coordinator: BookmarkCoordinator
+  let pump: BookmarkPump
+  private let epoch: UInt64
+
+  init(coordinator: BookmarkCoordinator, pump: BookmarkPump, epoch: UInt64) {
+    self.coordinator = coordinator
+    self.pump = pump
+    self.epoch = epoch
+  }
+
+  func validate(engine: String) throws {
+    guard coordinator.ownsPump(engine: engine, epoch: epoch) else { throw BookmarkCoordinatorError.staleRevision }
   }
 }

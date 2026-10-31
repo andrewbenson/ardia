@@ -211,6 +211,9 @@ public final class LibraryCatalog {
   @ObservationIgnored let client: any EngineClient
   @ObservationIgnored public private(set) var favicons: FaviconLibrary?
   @ObservationIgnored private var libraries: [String: HistoryLibrary] = [:]
+  @ObservationIgnored var bookmarkClaim: BookmarkCatalogClaim?
+  @ObservationIgnored var admittedRawBookmarkCommand = false
+  @ObservationIgnored private var bookmarkTasks: [String: Task<Void, Never>] = [:]
   @ObservationIgnored var bookmarkLibraries: [String: BookmarkLibrary] = [:]
   @ObservationIgnored private var bookmarkObservers: [String: [UUID: AsyncStream<BookmarkSnapshot>.Continuation]] = [:]
   @ObservationIgnored private var pending: [HistoryChange] = []
@@ -221,6 +224,42 @@ public final class LibraryCatalog {
   public init(client: any EngineClient) {
     self.client = client
     favicons = FaviconLibrary(client: client)
+  }
+
+  deinit { for task in bookmarkTasks.values { task.cancel() } }
+
+  public func claimBookmarks(coordinator: BookmarkCoordinator, pump: BookmarkPump) throws {
+    guard bookmarkClaim == nil, !observing, !admittedRawBookmarkCommand else { throw BookmarkCoordinatorError.ownershipUnavailable }
+    let claim = try pump.claimCatalog(coordinator: coordinator)
+    bookmarkClaim = claim
+    for engine in coordinator.catalogEngines {
+      publishDesired(coordinator.desiredView(engine: engine))
+      let stream = coordinator.desiredViews(engine: engine)
+      bookmarkTasks[engine] = Task { [weak self, weak claim] in
+        for await view in stream {
+          guard let self, let claim, self.bookmarkClaim === claim else { break }
+          guard (try? claim.validate(engine: engine)) != nil else { continue }
+          self.publishDesired(view)
+        }
+      }
+    }
+  }
+
+  func publishDesired(_ view: BookmarkDesiredView) {
+    if let current = bookmarkSnapshots[view.engine], current.revision > Int(clamping: view.revision) { return }
+    let roots = BookmarkFlat.roots(view.engine)
+    var nodes: [String: BookmarkNode] = [:]
+    for (id, value) in view.document["nodes"]?.object ?? [:] {
+      nodes[id] = BookmarkNode(id: id, kind: value["kind"]?.string ?? "folder", parentId: value["parentId"]?.string, title: value["title"]?.string ?? "", url: value["url"]?.string, addedAt: value["addedAt"]?.number ?? 0, syncKey: value["syncKey"]?.string, children: value["children"]?.array?.compactMap(\.string))
+    }
+    publishBookmarks(BookmarkSnapshot(roots: view.hasView ? roots : nil, nodes: nodes, ready: view.hasView, revision: Int(clamping: view.revision), readyForSync: view.readyForSync), engine: view.engine)
+  }
+
+  private func publishBookmarks(_ snapshot: BookmarkSnapshot, engine: String) {
+    bookmarkSnapshots[engine] = snapshot
+    if let continuations = bookmarkObservers[engine]?.values {
+      for continuation in continuations { continuation.yield(snapshot) }
+    }
   }
 
   public func history(engineProfile: String) -> HistorySnapshot { histories[engineProfile] ?? HistorySnapshot() }
@@ -265,12 +304,17 @@ public final class LibraryCatalog {
         }
       }
       if libraries[profile]?.snapshot.ready != true { await libraries[profile]?.reload() }
+      if let claim = bookmarkClaim {
+        if (try? claim.validate(engine: profile)) != nil {
+          publishDesired(claim.coordinator.desiredView(engine: profile))
+          if !claim.coordinator.desiredView(engine: profile).readyForSync { claim.pump.requestRead(engine: profile) }
+        }
+        continue
+      }
       if bookmarkLibraries[profile] == nil {
         bookmarkLibraries[profile] = BookmarkLibrary(engineProfile: profile, client: client) { [weak self] snapshot in
-          self?.bookmarkSnapshots[profile] = snapshot
-          if let continuations = self?.bookmarkObservers[profile]?.values {
-            for continuation in continuations { continuation.yield(snapshot) }
-          }
+          guard let self, self.bookmarkClaim == nil else { return }
+          self.publishBookmarks(snapshot, engine: profile)
         }
       }
       if bookmarkLibraries[profile]?.snapshot.ready != true { await bookmarkLibraries[profile]?.reload() }
@@ -278,10 +322,23 @@ public final class LibraryCatalog {
   }
 
   public func reloadBookmarks(engineProfile: String) async {
+    if let claim = bookmarkClaim {
+      guard (try? claim.validate(engine: engineProfile)) != nil else { return }
+      claim.pump.requestRead(engine: engineProfile)
+      await claim.pump.settle(engine: engineProfile)
+      guard (try? claim.validate(engine: engineProfile)) != nil else { return }
+      publishDesired(claim.coordinator.desiredView(engine: engineProfile))
+      return
+    }
     await bookmarkLibraries[engineProfile]?.reload()
   }
 
   private func bookmarkChanged(engineProfile: String) {
+    if let claim = bookmarkClaim {
+      guard (try? claim.validate(engine: engineProfile)) != nil else { return }
+      claim.pump.requestRead(engine: engineProfile)
+      return
+    }
     guard let library = bookmarkLibraries[engineProfile] else { return }
     Task { await library.reload() }
   }

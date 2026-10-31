@@ -12,6 +12,8 @@ public enum BookmarkCoordinatorError: Error, Equatable {
   case staleRevision
   case invalidProfileScope
   case unknownMutation(String)
+  case ownershipUnavailable
+  case invalidOperation(String)
 }
 
 public struct BookmarkEditStamp: Equatable, Sendable {
@@ -77,6 +79,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
     try await withCheckedThrowingContinuation { continuation in journalQueue.async { continuation.resume(with: Result { try body() }) } }
   }
   private var pumpEpoch: UInt64 = 0
+  private var catalogClaimed = false
   private let lock = NSRecursiveLock()
   private let writerLock = NSLock()
   private var profiles: JSMap<String>
@@ -92,6 +95,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
   private var bases: JSMap<BookmarkFlat> = [:]
   private let durability: BookmarkDurability
   private var streams: [UUID: (JSKey, BookmarkMembershipObserver)] = [:]
+  private var viewStreams: [UUID: (JSKey, BookmarkViewObserver)] = [:]
 
   public init(profiles: JSMap<String>, defaultProfile: String, owningProfiles: JSMap<String> = [:], makeID: @escaping () -> String = { UUID().uuidString.lowercased() }, now: @escaping () -> Double = { (Date().timeIntervalSince1970 * 1000).rounded(.down) }, stampProviders: BookmarkStampProviders = .init(), stampsEnabled: Bool = false, pendingStore: BookmarkPendingStore? = nil, launchInput: BookmarkLaunchInput = .init(), log: @escaping (String) -> Void = { NSLog("%@", $0) }) {
     self.profiles = profiles
@@ -167,7 +171,10 @@ public final class BookmarkCoordinator: @unchecked Sendable {
     }
   }
 
-  deinit { for stream in streams.values { stream.1.finish() } }
+  deinit {
+    for stream in streams.values { stream.1.finish() }
+    for stream in viewStreams.values { stream.1.finish() }
+  }
 
   private func locked<T>(_ body: () throws -> T) rethrows -> T {
     lock.lock()
@@ -212,7 +219,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
 
   func seed(engine: String, document: JSONValue, ready: Bool) {
     let notification = writing {
-      locked { () -> (BookmarkMembershipSnapshot, [BookmarkMembershipObserver]) in
+      locked { () -> BookmarkPublication in
         var view = desiredView(engine: engine)
         view.document = document
         view.hasView = true
@@ -261,11 +268,46 @@ public final class BookmarkCoordinator: @unchecked Sendable {
   }
 
   private func removeStream(_ token: UUID) { locked { _ = streams.removeValue(forKey: token) } }
-  private func notifications(_ engine: String) -> (BookmarkMembershipSnapshot, [BookmarkMembershipObserver]) {
-    (snapshot(desiredView(engine: engine)), streams.values.filter { $0.0 == JSKey(engine) }.map { $0.1 })
+  public func desiredViews(engine: String) -> AsyncStream<BookmarkDesiredView> {
+    let pair = AsyncStream<BookmarkDesiredView>.makeStream(bufferingPolicy: .bufferingNewest(1))
+    let token = UUID()
+    let observer = BookmarkViewObserver(pair.continuation)
+    let initial = locked {
+      viewStreams[token] = (JSKey(engine), observer)
+      return desiredView(engine: engine)
+    }
+    pair.continuation.onTermination = { [weak self] _ in self?.removeViewStream(token) }
+    observer.yield(initial)
+    return pair.stream
   }
-  private func deliver(_ notification: (BookmarkMembershipSnapshot, [BookmarkMembershipObserver])) {
-    for stream in notification.1 { stream.yield(notification.0) }
+
+  private func removeViewStream(_ token: UUID) { locked { _ = viewStreams.removeValue(forKey: token) } }
+  private func silentPublication(_ view: BookmarkDesiredView) -> BookmarkPublication {
+    BookmarkPublication(membership: snapshot(view), membershipObservers: [], view: view, viewObservers: [])
+  }
+  private func notifications(_ engine: String) -> BookmarkPublication {
+    let view = desiredView(engine: engine)
+    return BookmarkPublication(membership: snapshot(view), membershipObservers: streams.values.filter { $0.0 == JSKey(engine) }.map { $0.1 }, view: view, viewObservers: viewStreams.values.filter { $0.0 == JSKey(engine) }.map { $0.1 })
+  }
+  private func deliver(_ publication: BookmarkPublication) {
+    for stream in publication.membershipObservers { stream.yield(publication.membership) }
+    for stream in publication.viewObservers { stream.yield(publication.view) }
+  }
+
+  var catalogEngines: [String] {
+    locked {
+      var seen = Set<JSKey>()
+      return profiles.values.filter { !$0.hasPrefix("incognito:") && seen.insert(JSKey($0)).inserted }
+    }
+  }
+
+  func catalogProfile(engine: String) -> String? { locked { aliases(engine).first } }
+
+  func claimCatalog(epoch: UInt64) throws {
+    try locked {
+      guard !catalogClaimed, epoch == pumpEpoch else { throw BookmarkCoordinatorError.ownershipUnavailable }
+      catalogClaimed = true
+    }
   }
 
   public func pendingEditStamp(profileId: String, nodeId: String) -> BookmarkEditStamp? {
@@ -350,11 +392,11 @@ public final class BookmarkCoordinator: @unchecked Sendable {
 
   @discardableResult
   public func submit(profile: String, mutations: [BookmarkMutation], fromSync: Bool = false, requestID: String? = nil, expectedPumpEpoch: UInt64? = nil) throws -> BookmarkReceipt {
-    let result = try transact { () throws -> (BookmarkCheckpointInput?, () -> (BookmarkReceipt, (BookmarkMembershipSnapshot, [BookmarkMembershipObserver]))) in
+    let result = try transact { () throws -> (BookmarkCheckpointInput?, () -> (BookmarkReceipt, BookmarkPublication)) in
       if let expectedPumpEpoch, expectedPumpEpoch != pumpEpoch { throw BookmarkCoordinatorError.staleRevision }
       let engine = engine(profile: profile)
       let payload: JSONValue = ["kind": "submit", "profile": .string(profile), "engine": .string(engine), "fromSync": .bool(fromSync), "mutations": .array(mutations.map { ["method": .string($0.method), "args": .array($0.args)] })]
-      if let receipt = try durability.receipt(requestID: requestID, payload: payload) { return (nil, { (receipt, (self.snapshot(self.desiredView(engine: engine)), [])) }) }
+      if let receipt = try durability.receipt(requestID: requestID, payload: payload) { return (nil, { (receipt, self.silentPublication(self.desiredView(engine: engine))) }) }
       guard durability.writable else { throw BookmarkPendingStoreError.unavailable }
       var view = desiredView(engine: engine)
       let before = view.document
@@ -367,7 +409,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
         }
         if let target, !BookmarkReconcile.same(self.engine(profile: target), engine) { throw BookmarkCoordinatorError.invalidProfileScope }
       }
-      var reducer = BookmarkReducer(document: before, engine: engine, makeID: makeID, now: now)
+      var reducer = BookmarkReducer(document: before, engine: engine, profiles: aliases(engine), makeID: makeID, now: now)
       let results = try mutations.map { try reducer.apply($0) }
       view.document = reducer.document
       try durability.validateAcceptance(view.document, engine: engine)
@@ -421,9 +463,9 @@ public final class BookmarkCoordinator: @unchecked Sendable {
 
   @discardableResult
   public func replaceDocument(engine: String, document: JSONValue, expectedRevision: UInt64, requestID: String? = nil) throws -> BookmarkReceipt {
-    let result = try transact { () throws -> (BookmarkCheckpointInput?, () -> (BookmarkReceipt, (BookmarkMembershipSnapshot, [BookmarkMembershipObserver]))) in
+    let result = try transact { () throws -> (BookmarkCheckpointInput?, () -> (BookmarkReceipt, BookmarkPublication)) in
       let payload: JSONValue = ["kind": "replace", "engine": .string(engine), "document": document, "expectedRevision": .string(String(expectedRevision))]
-      if let receipt = try durability.receipt(requestID: requestID, payload: payload) { return (nil, { (receipt, (self.snapshot(self.desiredView(engine: engine)), [])) }) }
+      if let receipt = try durability.receipt(requestID: requestID, payload: payload) { return (nil, { (receipt, self.silentPublication(self.desiredView(engine: engine))) }) }
       guard durability.writable else { throw BookmarkPendingStoreError.unavailable }
       var view = desiredView(engine: engine)
       guard view.revision == expectedRevision else { throw BookmarkCoordinatorError.staleRevision }
@@ -444,9 +486,9 @@ public final class BookmarkCoordinator: @unchecked Sendable {
 
   @discardableResult
   public func completeRead(engine: String, document: JSONValue, capturedRevision: UInt64, epoch: UInt64? = nil) -> Bool {
-    let result: (BookmarkMembershipSnapshot, [BookmarkMembershipObserver])
+    let result: BookmarkPublication
     do {
-      result = try transact { () throws -> (BookmarkCheckpointInput?, () -> (BookmarkMembershipSnapshot, [BookmarkMembershipObserver])) in
+      result = try transact { () throws -> (BookmarkCheckpointInput?, () -> BookmarkPublication) in
         guard epoch == nil || epoch == pumpEpoch else { throw BookmarkCoordinatorError.staleRevision }
         var view = desiredView(engine: engine)
         let requiredRead = view.requiresRead || view.inFlightTarget != nil
@@ -571,7 +613,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
         let before = view
         view.requiresRead = true
         view.retryNotBeforeMs = max(view.retryNotBeforeMs ?? 0, nowMs + delayMs)
-        guard view != before else { return (nil, { (self.snapshot(view), [BookmarkMembershipObserver]()) }) }
+        guard view != before else { return (nil, { self.silentPublication(view) }) }
         view.revision += 1
         var nextViews = views
         nextViews[engine] = view
@@ -588,6 +630,7 @@ public final class BookmarkCoordinator: @unchecked Sendable {
 private struct BookmarkReducer {
   var document: JSONValue
   let engine: String
+  let profiles: [String]
   let makeID: () -> String
   let now: () -> Double
   var nodes: JSONObject { document["nodes"]?.object ?? [:] }
@@ -660,6 +703,38 @@ private struct BookmarkReducer {
     let args = mutation.args
     func arg(_ index: Int) -> JSONValue { index < args.count ? args[index] : .null }
     switch mutation.method {
+    case "applyBookmarkOperations":
+      for profile in profiles { _ = ensureRoots(profile) }
+      var flat = BookmarkFlat(document: document, engine: engine)
+      let operations = arg(0).array ?? []
+      var applied = 0
+      var invalid: [String] = []
+      for source in operations {
+        var operation = source
+        let kind = operation["op"]?.string ?? ""
+        guard ["add", "update", "move", "remove"].contains(kind) else { throw BookmarkCoordinatorError.invalidOperation(kind) }
+        let id = operation["id"]?.string ?? ""
+        let existing = flat.nodes[id]
+        if kind == "add", existing == nil {
+          let roots = BookmarkFlat.roots(engine)
+          let parent = operation["parent"]?.string ?? ""
+          let parentID = parent == "bar" ? roots.bar : parent == "other" ? roots.other : parent
+          guard flat.nodes[parentID]?["kind"] == "folder", let uuid = UUID(uuidString: id), uuid.uuidString.lowercased() == id else { break }
+          var fields = operation.object ?? [:]
+          fields["k"] = operation["k"] == "f" ? "f" : "u"
+          operation = .object(fields)
+          if operation["k"] == "u", !BookmarkReconcile.keepsURL(operation["u"]?.string ?? "") {
+            invalid.append(id)
+            continue
+          }
+        }
+        let replay = BookmarkReconcile.replay(flat, operations: [operation], engine: engine)
+        guard replay.structuralBreak == nil else { break }
+        flat = replay.tree
+        applied += 1
+      }
+      document = flat.document(profiles: profiles, preserving: document)
+      return ["applied": JSONValue(applied), "skipped": JSONValue(operations.count - applied - invalid.count), "invalid": JSONValue(invalid)]
     case "addBookmark", "addBookmarkFolder":
       let options = arg(0)
       let profile = options["profileId"]?.string ?? ""
@@ -776,6 +851,31 @@ private final class BookmarkMembershipObserver {
     if let revision, snapshot.revision <= revision { return }
     revision = snapshot.revision
     continuation.yield(snapshot)
+  }
+
+  func finish() { continuation.finish() }
+}
+
+private struct BookmarkPublication {
+  let membership: BookmarkMembershipSnapshot
+  let membershipObservers: [BookmarkMembershipObserver]
+  let view: BookmarkDesiredView
+  let viewObservers: [BookmarkViewObserver]
+}
+
+private final class BookmarkViewObserver {
+  private let lock = NSLock()
+  private let continuation: AsyncStream<BookmarkDesiredView>.Continuation
+  private var revision: UInt64?
+
+  init(_ continuation: AsyncStream<BookmarkDesiredView>.Continuation) { self.continuation = continuation }
+
+  func yield(_ view: BookmarkDesiredView) {
+    lock.lock()
+    defer { lock.unlock() }
+    if let revision, view.revision <= revision { return }
+    revision = view.revision
+    continuation.yield(view)
   }
 
   func finish() { continuation.finish() }

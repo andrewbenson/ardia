@@ -106,6 +106,14 @@ public extension LibraryCatalog {
 
   func applyBookmarks(ops: [BookmarkOperation], engineProfile: String) async throws -> BookmarkApplyResult {
     try checkWritable(engineProfile)
+    if let claim = bookmarkClaim {
+      try claim.validate(engine: engineProfile)
+      let (receipt, result) = try await claim.pump.submit(operations: ops, engine: engineProfile)
+      try claim.validate(engine: engineProfile)
+      publishDesired(receipt.view)
+      return result
+    }
+    admittedRawBookmarkCommand = true
     let result = try await client.applyBookmarks(ops: ops, engineProfile: engineProfile)
     if bookmarkLibraries[engineProfile] == nil { Task { await start(engineProfiles: [engineProfile]) } }
     else { await bookmarkLibraries[engineProfile]?.reload() }

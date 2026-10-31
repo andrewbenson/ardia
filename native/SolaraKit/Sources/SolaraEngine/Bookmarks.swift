@@ -76,14 +76,20 @@ public struct BookmarkRoots: Sendable, Equatable {
 public struct BookmarkSnapshot: Sendable, Equatable {
   public var roots: BookmarkRoots?
   public var nodes: [String: BookmarkNode]
-  public var ready: Bool
+  public var hasView: Bool
+  public var readyForSync: Bool
+  public var ready: Bool {
+    get { hasView }
+    set { hasView = newValue }
+  }
   public var revision: Int
   public var urlCount: Int { nodes.values.filter { !$0.isFolder }.count }
 
-  public init(roots: BookmarkRoots? = nil, nodes: [String: BookmarkNode] = [:], ready: Bool = false, revision: Int = 0) {
+  public init(roots: BookmarkRoots? = nil, nodes: [String: BookmarkNode] = [:], ready: Bool = false, revision: Int = 0, readyForSync: Bool? = nil) {
     self.roots = roots
     self.nodes = nodes
-    self.ready = ready
+    hasView = ready
+    self.readyForSync = readyForSync ?? ready
     self.revision = revision
   }
 }

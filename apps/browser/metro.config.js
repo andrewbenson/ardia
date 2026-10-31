@@ -7,6 +7,7 @@ const workspaceRoot = path.resolve(projectRoot, "../..");
 const config = mergeConfig(getDefaultConfig(projectRoot), {
   watchFolders: [workspaceRoot],
   resolver: {
+    blockList: [/(\/__tests__\/.*)$/, new RegExp(`^${projectRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/build-[^/]+(/.*)?$`)],
     nodeModulesPaths: [path.resolve(workspaceRoot, "node_modules")],
     resolveRequest(context, moduleName, platform) {
       if (platform === "macos" && (moduleName === "react-native" || moduleName.startsWith("react-native/"))) {
